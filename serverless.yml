@@ -1,0 +1,15 @@
+service:
+  name: webtask-bitfinex-data
+
+provider:
+  name: webtasks
+  environment:
+    BITFINEX_API_KEY: ${env:BITFINEX_API_KEY, file(secrets.yml):BITFINEX_API_KEY}
+    BITFINEX_API_SECRET: ${env:BITFINEX_API_SECRET, file(secrets.yml):BITFINEX_API_SECRET}
+
+functions:
+  main:
+    handler: handler
+
+plugins:
+  - '@webtask/serverless-webtasks'
