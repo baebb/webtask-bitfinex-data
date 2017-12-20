@@ -8,8 +8,10 @@ provider:
     BITFINEX_API_SECRET: ${env:BITFINEX_API_SECRET, file(secrets.yml):BITFINEX_API_SECRET}
 
 functions:
-  main:
-    handler: handler
+  getWallet:
+    handler: getWallet
+  getRates:
+    handler: getRates
 
 plugins:
   - '@webtask/serverless-webtasks'
