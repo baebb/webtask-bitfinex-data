@@ -9,6 +9,10 @@ module.exports = (ctx, cb) => {
   
   bfxRest.wallet_balances((err, res) => {
     if (err) cb(null, err);
-    cb(null, res);
+    ctx.storage.get(function (err, data) {
+      if (err) cb(null, err);
+      cb(null, data);
+    });
+    // cb(null, res);
   });
 };
