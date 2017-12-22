@@ -1,4 +1,3 @@
-'use strict';
 const BFX = require('bitfinex-api-node');
 const _ = require('lodash');
 let symbols = [

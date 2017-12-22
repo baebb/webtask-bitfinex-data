@@ -8,7 +8,15 @@
         "webtasks"
     ],
     "devDependencies": {
-        "@webtask/serverless-webtasks": "^1.0.1"
+        "@webtask/serverless-webtasks": "^1.0.1",
+        "babel-core": "^6.26.0",
+        "babel-loader": "^7.1.2",
+        "babel-plugin-transform-runtime": "^6.23.0",
+        "babel-polyfill": "^6.26.0",
+        "babel-preset-env": "^1.6.1",
+        "babel-preset-stage-0": "^6.24.1",
+        "serverless-webpack": "^4.2.0",
+        "webpack": "^3.10.0"
     },
     "dependencies": {
         "bitfinex-api-node": "^1.2.1",

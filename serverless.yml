@@ -10,6 +10,9 @@ provider:
 functions:
   getFinexData:
     handler: getFinexData
+  storeFinexData:
+    handler: storeFinexData
 
 plugins:
   - '@webtask/serverless-webtasks'
+  - serverless-webpack
