@@ -1,7 +1,6 @@
 'use strict';
 const BFX = require('bitfinex-api-node');
 const _ = require('lodash');
-
 let symbols = [
   'btcusd',
   'ltcusd',
@@ -117,15 +116,18 @@ module.exports = (ctx, cb) => {
       }
     });
     
-    totals.totalValue = 0;
+    let res = {};
+    res.assets = totals;
+    res.timestamp = Date.now();
+    res.totalValue = 0;
     _.each(totals, (currencyObj, key) => {
       if (_.isNumber(currencyObj.value) && !_.isNaN(currencyObj.value)) {
         console.log(`ADDING_TO_TOTAL: ${key} - $${currencyObj.value}`);
-        totals.totalValue += currencyObj.value;
+        res.totalValue += currencyObj.value;
       }
     });
     console.log('BALANCE_COMPLETE');
-    cb(null, totals);
+    cb(null, res);
   };
   
   const getWallet = () => {
@@ -136,7 +138,6 @@ module.exports = (ctx, cb) => {
         cb(null, err);
       }
       console.log(`GOT_WALLET`);
-      console.log(res);
       ctx.storage.get(function (err, data) {
         if (err) {
           console.log(`GET_STORE_ERROR:`);
@@ -150,7 +151,6 @@ module.exports = (ctx, cb) => {
         else {
           console.log(`GOT_STORE`);
           buildBalance(res, data);
-          // cb(null, data);
         }
       });
     });
