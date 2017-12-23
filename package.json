@@ -11,6 +11,7 @@
         "@webtask/serverless-webtasks": "^1.0.1"
     },
     "dependencies": {
+        "async": "^2.6.0",
         "bitfinex-api-node": "^1.2.1",
         "lodash": "^4.17.4"
     }

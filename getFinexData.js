@@ -1,26 +1,28 @@
 'use strict';
+'use latest';
 const BFX = require('bitfinex-api-node');
 const _ = require('lodash');
+const async = require('async');
 
 let taskName;
 let symbols = [
   'btcusd',
   'ltcusd',
   'ethusd',
+  'bchusd',
+  'neousd',
+  'xrpusd',
+  'iotusd',
   'etcusd',
   'rrtusd',
   'zecusd',
+  'eosusd',
+  'sanusd',
+  'omgusd',
   'xmrusd',
   'dshusd',
   'bccusd',
   'bcuusd',
-  'xrpusd',
-  'iotusd',
-  'eosusd',
-  'sanusd',
-  'omgusd',
-  'bchusd',
-  'neousd',
   'etpusd',
   'qtmusd',
   'bt1usd',
@@ -36,50 +38,106 @@ let symbols = [
 module.exports = (ctx, cb) => {
   const apiKey = ctx.secrets.BITFINEX_API_KEY;
   const apiSecret = ctx.secrets.BITFINEX_API_SECRET;
-  const bfxRest = new BFX(apiKey, apiSecret, {version: 1}).rest;
+  const bfxRest = new BFX(apiKey, apiSecret, { version: 1 }).rest;
   
-  const getRate = (symbol) => {
-    console.log(`${taskName} GETTING_RATE: ${symbol}`);
-    bfxRest.ticker(symbol, (err, res) => {
-      if (err) {
-        console.log(`${taskName} GET_RATE_ERROR:`);
-        console.log(err);
-        cb(null, err);
-      }
-      const rate = res.last_price;
-      storeRates(symbol, rate);
-    });
-  };
-  
-  const storeRates = (symbol, rate) => {
-    console.log(`${taskName} STORING_RATE: ${symbol} - $${rate}`);
-    ctx.storage.get(function (err, data) {
-      if (err) {
-        console.log(`${taskName} GET_RATE_STORE_ERROR:`);
-        console.log(err);
-        cb(null, err);
-      }
-      let store = data || {};
-      store[symbol] = rate;
-      ctx.storage.set(store, function (err) {
+  const getStore = () => {
+    return new Promise((resolve, reject) => {
+      ctx.storage.get((err, data) => {
         if (err) {
-          console.log(`${taskName} UPDATE_RATE_STORE_ERROR:`);
+          console.log(`${taskName} GET_STORE_ERROR:`);
           console.log(err);
-          cb(null, err);
+          reject(err);
         }
-        getRates(store);
+        const store = data || {};
+        resolve(store);
       });
     });
   };
   
-  const getRates = (store) => {
-    const rateToGet = symbols.shift();
-    if (rateToGet !== undefined) {
-      getRate(rateToGet);
-    } else {
-      console.log(`${taskName} GOT_ALL_RATES`);
-      cb(null, store)
-    }
+  const setStore = (newStore) => {
+    return new Promise((resolve, reject) => {
+      ctx.storage.set(newStore, err => {
+        if (err) {
+          console.log(`${taskName} SET_STORE_ERROR:`);
+          console.log(err);
+          reject(err);
+        }
+        resolve(newStore);
+      });
+    });
+  };
+  
+  function storeRates(symbol, rate) {
+    console.log(`${taskName} STORING_RATE: ${symbol} - $${rate}`);
+    // ctx.storage.get((err, data) => {
+    //   if (err) {
+    //     console.log(`${taskName} GET_RATE_STORE_ERROR:`);
+    //     console.log(err);
+    //     cb(null, err);
+    //   }
+    //   let store = data || {};
+    //   store.rates[symbol] = rate;
+    //   ctx.storage.set(store, err => {
+    //     if (err) {
+    //       console.log(`${taskName} UPDATE_RATE_STORE_ERROR:`);
+    //       console.log(err);
+    //       cb(null, err);
+    //     }
+    //     getRates(store);
+    //   });
+    // });
+  };
+  
+  async function getRates(startIndex) {
+    const symbolsLen = symbols.length;
+    const symbolsGroup0 = symbols.slice(0, 20);
+    const symbolsGroup1 = symbols.slice(10, 20);
+    const symbolsGroup2 = symbols.slice(20, symbolsLen);
+    
+    const buildRates = () => {
+      return new Promise((resolve, reject) => {
+        async.mapValues(symbolsGroup0, (symbol, key, acb) => {
+          console.log(`${taskName} GETTING_RATE: ${symbol}`);
+          bfxRest.ticker(symbol, (err, res) => {
+            if (err) {
+              acb(err);
+            }
+            const rate = res.last_price;
+            acb(null, rate);
+          })
+        }, (err, results) => {
+          if (err) {
+            console.log(`${taskName} GET_RATE_ERROR:`);
+            console.log(err);
+            reject(err);
+          }
+          let newRatesObj = {};
+          _.forEach(results, (value, key) => {
+            const symbol = symbolsGroup0[key];
+            newRatesObj[symbol] = value;
+          });
+          console.log(newRatesObj);
+          resolve(newRatesObj);
+        });
+      })
+    };
+    
+    getStore().then((store) => {
+      buildRates().then((rates) => {
+        let newStore = store;
+        newStore.rates = rates;
+        setStore(newStore).then((res) => {
+          // callback
+          cb(null, res);
+        })
+      })
+    });
+    // let store = await getStore();
+    // store.rates = await buildRates();
+    // setStore(store).then((res) => {
+    //   // callback
+    //   cb(null, res);
+    // });
   };
   
   const buildBalance = (wallet, rates) => {
@@ -143,13 +201,13 @@ module.exports = (ctx, cb) => {
           console.log(err);
           cb(null, err);
         }
-        if (data === {}) {
+        if (data.rates === {}) {
           console.log(`${taskName} RATE_STORE_EMPTY`);
           cb(null, 'RATE_STORE_EMPTY');
         }
         else {
           console.log(`${taskName} GOT_RATE_STORE`);
-          buildBalance(res, data);
+          buildBalance(res, data.rates);
         }
       });
     });
