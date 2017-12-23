@@ -5,7 +5,7 @@ const _ = require('lodash');
 const async = require('async');
 
 let taskName;
-let symbols = [
+const symbols = [
   'btcusd',
   'ltcusd',
   'ethusd',
@@ -34,8 +34,14 @@ let symbols = [
   'qshusd',
   'yywusd',
 ];
+const symbolsLen = symbols.length;
+const symbolsGroups = [
+  symbols.slice(0, 10),
+  symbols.slice(10, 20),
+  symbols.slice(20, symbolsLen),
+];
 
-module.exports = (ctx, cb) => {
+module.exports = async function (ctx, cb) {
   const apiKey = ctx.secrets.BITFINEX_API_KEY;
   const apiSecret = ctx.secrets.BITFINEX_API_SECRET;
   const bfxRest = new BFX(apiKey, apiSecret, { version: 1 }).rest;
@@ -89,14 +95,11 @@ module.exports = (ctx, cb) => {
   };
   
   async function getRates(groupNumber) {
-    const symbolsLen = symbols.length;
-    const symbolsGroup0 = symbols.slice(0, 10);
-    const symbolsGroup1 = symbols.slice(10, 20);
-    const symbolsGroup2 = symbols.slice(20, symbolsLen);
-    
+    console.log(`${taskName} GETTING_RATES_FOR_GROUP${groupNumber}`);
+    const symbolGroup = symbolsGroups[groupNumber];
     const buildRates = () => {
       return new Promise((resolve, reject) => {
-        async.mapValues(symbolsGroup0, (symbol, key, acb) => {
+        async.mapValues(symbolGroup, (symbol, key, acb) => {
           console.log(`${taskName} GETTING_RATE: ${symbol}`);
           bfxRest.ticker(symbol, (err, res) => {
             if (err) {
@@ -113,10 +116,9 @@ module.exports = (ctx, cb) => {
           }
           let newRatesObj = {};
           _.forEach(results, (value, key) => {
-            const symbol = symbolsGroup0[key];
+            const symbol = symbolGroup[key];
             newRatesObj[symbol] = value;
           });
-          console.log(newRatesObj);
           resolve(newRatesObj);
         });
       })
@@ -124,7 +126,8 @@ module.exports = (ctx, cb) => {
     
     let store = await getStore();
     store.rates = await buildRates();
-    
+    store.nextGroup = (store.nextGroup + 1) % 3;
+    console.log(`next group will be ${store.nextGroup}`);
     setStore(store).then((res) => {
       cb(null, res);
     });
@@ -210,6 +213,8 @@ module.exports = (ctx, cb) => {
   } else {
     console.log(`NEW_GET_RATES_REQUEST`);
     taskName = 'GET_RATES';
-    getRates();
+    const store = await getStore();
+    const nextGroup = store.nextGroup || 0;
+    getRates(nextGroup);
   }
 };
