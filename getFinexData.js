@@ -88,9 +88,9 @@ module.exports = (ctx, cb) => {
     // });
   };
   
-  async function getRates(startIndex) {
+  async function getRates(groupNumber) {
     const symbolsLen = symbols.length;
-    const symbolsGroup0 = symbols.slice(0, 20);
+    const symbolsGroup0 = symbols.slice(0, 10);
     const symbolsGroup1 = symbols.slice(10, 20);
     const symbolsGroup2 = symbols.slice(20, symbolsLen);
     
@@ -122,22 +122,12 @@ module.exports = (ctx, cb) => {
       })
     };
     
-    getStore().then((store) => {
-      buildRates().then((rates) => {
-        let newStore = store;
-        newStore.rates = rates;
-        setStore(newStore).then((res) => {
-          // callback
-          cb(null, res);
-        })
-      })
+    let store = await getStore();
+    store.rates = await buildRates();
+    
+    setStore(store).then((res) => {
+      cb(null, res);
     });
-    // let store = await getStore();
-    // store.rates = await buildRates();
-    // setStore(store).then((res) => {
-    //   // callback
-    //   cb(null, res);
-    // });
   };
   
   const buildBalance = (wallet, rates) => {
