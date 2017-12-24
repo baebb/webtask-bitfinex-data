@@ -10,6 +10,8 @@ provider:
 functions:
   getFinexData:
     handler: getFinexData
+    events:
+      - schedule: rate(1 minute)
 
 plugins:
   - '@webtask/serverless-webtasks'
