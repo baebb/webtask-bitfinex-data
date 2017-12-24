@@ -1,2 +1,2 @@
 # webtask-bitfinex-data
-Auth0 Serverless Webtask to get data from bitfinex api and write it somewhere
+Auth0 Serverless Webtask to get ticker rates and wallet balances from bitfinex api

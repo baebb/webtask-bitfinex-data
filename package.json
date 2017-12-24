@@ -1,7 +1,7 @@
 {
     "name": "webtask-bitfinex-data",
     "version": "0.0.1",
-    "description": "Auth0 Serverless Webtask to get data from bitfinex api and write it somewhere",
+    "description": "Auth0 Serverless Webtask to get ticker rates and wallet balances from bitfinex api",
     "main": "handler.js",
     "keywords": [
         "serverless",
