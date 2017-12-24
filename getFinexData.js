@@ -46,65 +46,59 @@ module.exports = async function (ctx, cb) {
   const apiSecret = ctx.secrets.BITFINEX_API_SECRET;
   const bfxRest = new BFX(apiKey, apiSecret, { version: 1 }).rest;
   
-  const getStore = () => {
-    return new Promise((resolve, reject) => {
-      ctx.storage.get((err, data) => {
-        if (err) {
-          console.log(`${taskName} GET_STORE_ERROR:`);
-          // console.log(err);
-          reject(err);
-        }
-        const store = data || {};
-        resolve(store);
-      });
+  const getStore = () => new Promise((resolve, reject) => {
+    ctx.storage.get((err, data) => {
+      if (err) {
+        console.log(`${taskName} GET_STORE_ERROR:`);
+        reject(err);
+      }
+      const store = data || {};
+      resolve(store);
     });
-  };
+  });
   
-  const setStore = (newStore) => {
-    return new Promise((resolve, reject) => {
-      ctx.storage.set(newStore, err => {
-        if (err) {
-          console.log(`${taskName} SET_STORE_ERROR:`);
-          // console.log(err);
-          reject(err);
-        }
-        resolve(newStore);
-      });
+  const setStore = (newStore) => new Promise((resolve, reject) => {
+    ctx.storage.set(newStore, err => {
+      if (err) {
+        console.log(`${taskName} SET_STORE_ERROR:`);
+        reject(err);
+      }
+      resolve(newStore);
     });
-  };
+  });
   
   async function getRates(groupNumber) {
     console.log(`${taskName} GETTING_RATES_FOR_GROUP${groupNumber}`);
     const symbolGroup = symbolsGroups[groupNumber];
-    const buildRates = () => {
-      return new Promise((resolve, reject) => {
-        async.mapValues(symbolGroup, (symbol, key, acb) => {
-          console.log(`${taskName} GETTING_RATE: ${symbol}`);
-          bfxRest.ticker(symbol, (err, res) => {
-            if (err) {
-              acb(err);
-            }
+    const buildRates = () => new Promise((resolve, reject) => {
+      async.mapValues(symbolGroup, (symbol, key, acb) => {
+        console.log(`${taskName} GETTING_RATE: ${symbol}`);
+        bfxRest.ticker(symbol, (err, res) => {
+          if (err) {
+            acb(err);
+          } else {
             const rate = res.last_price;
             acb(null, rate);
-          })
-        }, (err, results) => {
-          if (err) {
-            reject(err);
           }
+        })
+      }, (err, results) => {
+        if (err) {
+          reject(err);
+        } else {
           let newRatesObj = {};
           _.forEach(results, (value, key) => {
             const symbol = symbolGroup[key];
             newRatesObj[symbol] = value;
           });
           resolve(newRatesObj);
-        });
-      })
-    };
+        }
+      });
+    });
+    
     try {
       let store = await getStore();
       const newRates = await buildRates();
       _.forEach(newRates, (value, key) => {
-        console.log(`${taskName} STORING_RATE: ${key} - $${value}`);
         store.rates[key] = value;
       });
       store.nextGroup = (store.nextGroup + 1) % 3;
@@ -115,12 +109,9 @@ module.exports = async function (ctx, cb) {
       console.log(err);
       cb(null, err);
     }
-    // setStore(store).then((res) => {
-    //   cb(null, res);
-    // });
   };
   
-  const buildBalance = (wallet, rates) => {
+  const buildBalances = (wallet, rates) => {
     console.log(`${taskName} BUILDING_BALANCE`);
     let totals = {};
     wallet.forEach((walletObj) => {
@@ -133,6 +124,7 @@ module.exports = async function (ctx, cb) {
         totals[currency] = {};
         totals[currency].holding = amountNum;
         if (currency !== 'usd') {
+          totals[currency].rate = rates[currencyUsd];
           totals[currency].value = amountNum * rates[currencyUsd];
         }
         else {
@@ -163,40 +155,36 @@ module.exports = async function (ctx, cb) {
         res.totalValue += currencyObj.value;
       }
     });
-    console.log(`${taskName} BALANCE_BUILD_COMPLETE`);
-    cb(null, res);
+    return res;
   };
   
-  const getWallet = () => {
+  const getWallet = () => new Promise((resolve, reject) => {
     bfxRest.wallet_balances((err, res) => {
       if (err) {
         console.log(`${taskName} GET_WALLET_ERROR:`);
-        console.log(err);
-        cb(null, err);
+        reject(err);
       }
-      console.log(`${taskName} GOT_WALLET`);
-      ctx.storage.get(function (err, data) {
-        if (err) {
-          console.log(`${taskName} GET_RATE_STORE_ERROR:`);
-          console.log(err);
-          cb(null, err);
-        }
-        if (data.rates === {}) {
-          console.log(`${taskName} RATE_STORE_EMPTY`);
-          cb(null, 'RATE_STORE_EMPTY');
-        }
-        else {
-          console.log(`${taskName} GOT_RATE_STORE`);
-          buildBalance(res, data.rates);
-        }
-      });
+      resolve(res)
     });
-  };
+  });
+  
+  async function getBalances() {
+    let wallet, store;
+    try {
+      wallet = await getWallet();
+      store = await getStore();
+    } catch(err) {
+      console.log(`${taskName} ERROR:`);
+      cb(null, err);
+    }
+    const balances = buildBalances(wallet, store.rates);
+    cb(null, balances)
+  }
   
   if (ctx.query.summary === 'true') {
     console.log(`NEW_GET_BALANCES_REQUEST`);
     taskName = 'GET_BALANCES';
-    getWallet();
+    getBalances();
   } else {
     console.log(`NEW_GET_RATES_REQUEST`);
     taskName = 'GET_RATES';
@@ -205,9 +193,9 @@ module.exports = async function (ctx, cb) {
       const nextGroup = store.nextGroup || 0;
       getRates(nextGroup);
     } catch (err) {
-     console.log(`${taskName} ERROR:`);
-     console.log(err);
-     cb(null, err);
+      console.log(`${taskName} ERROR:`);
+      console.log(err);
+      cb(null, err);
     }
   }
 };
