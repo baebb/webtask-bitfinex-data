@@ -67,52 +67,63 @@ module.exports = async function (ctx, cb) {
     });
   });
   
-  async function getRates(groupNumber) {
+  const getWallet = () => new Promise((resolve, reject) => {
+    bfxRest.wallet_balances((err, res) => {
+      if (err) {
+        console.log(`${taskName} GET_WALLET_ERROR:`);
+        reject(err);
+      }
+      resolve(res)
+    });
+  });
+  
+  const buildRates = (symbolGroup) => new Promise((resolve, reject) => {
+    async.mapValues(symbolGroup, (symbol, key, acb) => {
+      console.log(`${taskName} GETTING_RATE: ${symbol}`);
+      bfxRest.ticker(symbol, (err, res) => {
+        if (err) {
+          acb(err);
+        } else {
+          const rate = res.last_price;
+          acb(null, rate);
+        }
+      })
+    }, (err, results) => {
+      if (err) {
+        reject(err);
+      } else {
+        let newRatesObj = {};
+        _.forEach(results, (value, key) => {
+          const symbol = symbolGroup[key];
+          console.log(`${taskName} SETTING_RATE: ${symbol} - $${value}`);
+          newRatesObj[symbol] = value;
+        });
+        resolve(newRatesObj);
+      }
+    });
+  });
+  
+  async function getRates(groupNumber = 0) {
     console.log(`${taskName} GETTING_RATES_FOR_GROUP${groupNumber}`);
     const symbolGroup = symbolsGroups[groupNumber];
-    const buildRates = () => new Promise((resolve, reject) => {
-      async.mapValues(symbolGroup, (symbol, key, acb) => {
-        console.log(`${taskName} GETTING_RATE: ${symbol}`);
-        bfxRest.ticker(symbol, (err, res) => {
-          if (err) {
-            acb(err);
-          } else {
-            const rate = res.last_price;
-            acb(null, rate);
-          }
-        })
-      }, (err, results) => {
-        if (err) {
-          reject(err);
-        } else {
-          let newRatesObj = {};
-          _.forEach(results, (value, key) => {
-            const symbol = symbolGroup[key];
-            newRatesObj[symbol] = value;
-          });
-          resolve(newRatesObj);
-        }
-      });
-    });
-    
+    let store, newRates, newStore;
     try {
-      let store = await getStore();
-      const newRates = await buildRates();
+      store = await getStore();
+      newRates = await buildRates(symbolGroup);
       _.forEach(newRates, (value, key) => {
         store.rates[key] = value;
       });
       store.nextGroup = (store.nextGroup + 1) % 3;
-      const newStore = await setStore(store);
-      return cb(null, newStore);
+      newStore = await setStore(store);
     } catch (err) {
       console.log(`${taskName} ERROR:`);
       console.log(err);
       cb(null, err);
     }
+    return cb(null, newStore);
   };
   
   const buildBalances = (wallet, rates) => {
-    console.log(`${taskName} BUILDING_BALANCE`);
     let totals = {};
     wallet.forEach((walletObj) => {
       const { currency, amount } = walletObj;
@@ -151,33 +162,22 @@ module.exports = async function (ctx, cb) {
     res.totalValue = 0;
     _.each(totals, (currencyObj, key) => {
       if (_.isNumber(currencyObj.value) && !_.isNaN(currencyObj.value)) {
-        console.log(`${taskName} ADDING_TO_TOTAL: ${key} - $${currencyObj.value}`);
         res.totalValue += currencyObj.value;
       }
     });
     return res;
   };
-  
-  const getWallet = () => new Promise((resolve, reject) => {
-    bfxRest.wallet_balances((err, res) => {
-      if (err) {
-        console.log(`${taskName} GET_WALLET_ERROR:`);
-        reject(err);
-      }
-      resolve(res)
-    });
-  });
-  
+
   async function getBalances() {
-    let wallet, store;
+    let wallet, store, balances;
     try {
       wallet = await getWallet();
       store = await getStore();
+      balances = buildBalances(wallet, store.rates);
     } catch(err) {
       console.log(`${taskName} ERROR:`);
       cb(null, err);
     }
-    const balances = buildBalances(wallet, store.rates);
     cb(null, balances)
   }
   
@@ -188,14 +188,14 @@ module.exports = async function (ctx, cb) {
   } else {
     console.log(`NEW_GET_RATES_REQUEST`);
     taskName = 'GET_RATES';
+    let store;
     try {
-      const store = await getStore();
-      const nextGroup = store.nextGroup || 0;
-      getRates(nextGroup);
+      store = await getStore();
     } catch (err) {
       console.log(`${taskName} ERROR:`);
       console.log(err);
       cb(null, err);
     }
+    getRates(store.nextGroup);
   }
 };
