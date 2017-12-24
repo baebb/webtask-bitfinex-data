@@ -51,7 +51,7 @@ module.exports = async function (ctx, cb) {
       ctx.storage.get((err, data) => {
         if (err) {
           console.log(`${taskName} GET_STORE_ERROR:`);
-          console.log(err);
+          // console.log(err);
           reject(err);
         }
         const store = data || {};
@@ -65,33 +65,12 @@ module.exports = async function (ctx, cb) {
       ctx.storage.set(newStore, err => {
         if (err) {
           console.log(`${taskName} SET_STORE_ERROR:`);
-          console.log(err);
+          // console.log(err);
           reject(err);
         }
         resolve(newStore);
       });
     });
-  };
-  
-  function storeRates(symbol, rate) {
-    console.log(`${taskName} STORING_RATE: ${symbol} - $${rate}`);
-    // ctx.storage.get((err, data) => {
-    //   if (err) {
-    //     console.log(`${taskName} GET_RATE_STORE_ERROR:`);
-    //     console.log(err);
-    //     cb(null, err);
-    //   }
-    //   let store = data || {};
-    //   store.rates[symbol] = rate;
-    //   ctx.storage.set(store, err => {
-    //     if (err) {
-    //       console.log(`${taskName} UPDATE_RATE_STORE_ERROR:`);
-    //       console.log(err);
-    //       cb(null, err);
-    //     }
-    //     getRates(store);
-    //   });
-    // });
   };
   
   async function getRates(groupNumber) {
@@ -110,8 +89,6 @@ module.exports = async function (ctx, cb) {
           })
         }, (err, results) => {
           if (err) {
-            console.log(`${taskName} GET_RATE_ERROR:`);
-            console.log(err);
             reject(err);
           }
           let newRatesObj = {};
@@ -123,14 +100,24 @@ module.exports = async function (ctx, cb) {
         });
       })
     };
-    
-    let store = await getStore();
-    store.rates = await buildRates();
-    store.nextGroup = (store.nextGroup + 1) % 3;
-    console.log(`next group will be ${store.nextGroup}`);
-    setStore(store).then((res) => {
-      cb(null, res);
-    });
+    try {
+      let store = await getStore();
+      const newRates = await buildRates();
+      _.forEach(newRates, (value, key) => {
+        console.log(`${taskName} STORING_RATE: ${key} - $${value}`);
+        store.rates[key] = value;
+      });
+      store.nextGroup = (store.nextGroup + 1) % 3;
+      const newStore = await setStore(store);
+      return cb(null, newStore);
+    } catch (err) {
+      console.log(`${taskName} ERROR:`);
+      console.log(err);
+      cb(null, err);
+    }
+    // setStore(store).then((res) => {
+    //   cb(null, res);
+    // });
   };
   
   const buildBalance = (wallet, rates) => {
@@ -209,12 +196,18 @@ module.exports = async function (ctx, cb) {
   if (ctx.query.summary === 'true') {
     console.log(`NEW_GET_BALANCES_REQUEST`);
     taskName = 'GET_BALANCES';
-    getWallet()
+    getWallet();
   } else {
     console.log(`NEW_GET_RATES_REQUEST`);
     taskName = 'GET_RATES';
-    const store = await getStore();
-    const nextGroup = store.nextGroup || 0;
-    getRates(nextGroup);
+    try {
+      const store = await getStore();
+      const nextGroup = store.nextGroup || 0;
+      getRates(nextGroup);
+    } catch (err) {
+     console.log(`${taskName} ERROR:`);
+     console.log(err);
+     cb(null, err);
+    }
   }
 };
